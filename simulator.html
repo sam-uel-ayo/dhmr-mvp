@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock Screen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Smooth fade transition to hide the app */
+        .fade-out { opacity: 0; pointer-events: none; transition: opacity 0.3s ease-in-out; }
+        .fade-in { opacity: 1; transition: opacity 0.5s ease-in-out; }
+    </style>
+</head>
+<body class="bg-black text-white h-screen w-screen overflow-hidden flex flex-col relative select-none">
+
+    <div id="trigger-ui" class="absolute inset-0 flex flex-col items-center justify-center z-20">
+        <button id="sos-button" class="w-64 h-64 rounded-full active:bg-gray-900 transition-colors duration-200 outline-none flex items-center justify-center">
+            <span class="text-gray-800 text-xs tracking-widest opacity-50">SYSTEM ARMED</span>
+        </button>
+        <p id="status-text" class="text-gray-600 text-sm mt-8 opacity-0 transition-opacity">Acquiring Location...</p>
+    </div>
+
+    <div id="lock-screen" class="absolute inset-0 flex flex-col items-center pt-24 z-10 opacity-0 pointer-events-none">
+        <h1 id="clock" class="text-7xl font-light mb-2">00:00</h1>
+        <p id="date" class="text-gray-400 text-lg tracking-wide">Monday, January 1</p>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // Your live Railway API Endpoint
+        const API_URL = '/api/trigger_alert.php';
+        
+        const btn = document.getElementById('sos-button');
+        const triggerUI = document.getElementById('trigger-ui');
+        const lockScreen = document.getElementById('lock-screen');
+        const statusText = document.getElementById('status-text');
+
+        // Setup Fake Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            document.getElementById('date').innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- THE SOS LOGIC ---
+        btn.addEventListener('click', () => {
+            // Vibrate if supported (mobile only)
+            if (navigator.vibrate) navigator.vibrate(200);
+            
+            statusText.classList.remove('opacity-0');
+
+            if (!navigator.geolocation) {
+                statusText.innerText = 'GPS not supported on this device.';
+                return;
+            }
+
+            // Grab the live coordinates silently
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+
+                    // Immediately hide the UI to show the fake lock screen
+                    triggerUI.classList.add('fade-out');
+                    lockScreen.classList.remove('opacity-0');
+                    lockScreen.classList.add('fade-in');
+
+                    // Send the payload to your Railway backend
+                    try {
+                        const response = await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                user_id: 1, // Matches the dummy user
+                                lat: lat,
+                                lng: lng
+                            })
+                        });
+
+                        const result = await response.json();
+                        console.log('Backend Response:', result);
+                    } catch (error) {
+                        console.error('Failed to send SOS:', error);
+                    }
+                },
+                (error) => {
+                    console.error('GPS Error:', error);
+                    statusText.innerText = 'Failed to acquire GPS.';
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        });
+    </script>
+</body>
+</html>
