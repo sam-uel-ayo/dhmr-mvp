@@ -1,24 +1,34 @@
 <?php
 // db_connect.php
 
-// Railway injects these specific environment variables automatically when you attach a MySQL database.
-// The fallback values after the "?:" are for your local testing environment.
-$host = getenv('MYSQLHOST') ?: 'localhost';
-$port = getenv('MYSQLPORT') ?: '3306';
-$user = getenv('MYSQLUSER') ?: 'root';
-$pass = getenv('MYSQLPASSWORD') ?: ''; // Put your local MySQL password here if you have one
-$dbname = getenv('MYSQL_DATABASE') ?: 'dhmr_db';
+// Bulletproof function to grab environment variables across different PHP server configs
+function getEnvVar($key, $default) {
+    $val = getenv($key);
+    if (!$val) $val = $_SERVER[$key] ?? null;
+    if (!$val) $val = $_ENV[$key] ?? null;
+    return $val ?: $default;
+}
+
+$host = getEnvVar('MYSQLHOST', 'localhost');
+$port = getEnvVar('MYSQLPORT', '3306');
+$user = getEnvVar('MYSQLUSER', 'root');
+$pass = getEnvVar('MYSQLPASSWORD', '');
+$dbname = getEnvVar('MYSQL_DATABASE', 'dhmr_db'); // Matches your Railway variable exactly
 
 try {
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $pdo = new PDO($dsn, $user, $pass);
     
-    // Set PDO to throw exceptions on errors and return associative arrays
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Return a clean JSON error if it fails, rather than dumping stack traces
+    // TEMPORARY DEBUG MODE: Expose the real error and the host it's trying to connect to
     header('Content-Type: application/json');
-    die(json_encode(['success' => false, 'error' => 'Database connection failed.']));
+    die(json_encode([
+        'success' => false, 
+        'error' => 'Database connection failed.',
+        'real_error_message' => $e->getMessage(),
+        'debug_host_attempted' => $host
+    ]));
 }
 ?>
