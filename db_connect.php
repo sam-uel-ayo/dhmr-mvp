@@ -7,7 +7,7 @@ $host = getenv('MYSQLHOST') ?: 'localhost';
 $port = getenv('MYSQLPORT') ?: '3306';
 $user = getenv('MYSQLUSER') ?: 'root';
 $pass = getenv('MYSQLPASSWORD') ?: ''; // Put your local MySQL password here if you have one
-$dbname = getenv('MYSQLDATABASE') ?: 'dhmr_db';
+$dbname = getenv('MYSQL_DATABASE') ?: 'dhmr_db';
 
 try {
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
