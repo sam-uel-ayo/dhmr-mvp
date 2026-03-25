@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lock Screen</title>
+    <title>Lock Screen (Simulator)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Smooth fade transition to hide the app */
         .fade-out { opacity: 0; pointer-events: none; transition: opacity 0.3s ease-in-out; }
         .fade-in { opacity: 1; transition: opacity 0.5s ease-in-out; }
     </style>
@@ -26,16 +25,17 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        // Your live Railway API Endpoint
-        const API_URL = '/api/trigger_alert.php';
+        const TRIGGER_URL = '/api/trigger_alert.php';
+        const UPDATE_URL = '/api/update_location.php';
         
         const btn = document.getElementById('sos-button');
         const triggerUI = document.getElementById('trigger-ui');
         const lockScreen = document.getElementById('lock-screen');
         const statusText = document.getElementById('status-text');
 
-        // Setup Fake Clock
+        let activeAlertId = null;
+        let trackingInterval = null;
+
         function updateClock() {
             const now = new Date();
             document.getElementById('clock').innerText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -44,54 +44,69 @@
         setInterval(updateClock, 1000);
         updateClock();
 
-        // --- THE SOS LOGIC ---
         btn.addEventListener('click', () => {
-            // Vibrate if supported (mobile only)
             if (navigator.vibrate) navigator.vibrate(200);
-            
             statusText.classList.remove('opacity-0');
 
             if (!navigator.geolocation) {
-                statusText.innerText = 'GPS not supported on this device.';
+                statusText.innerText = 'GPS not supported.';
                 return;
             }
 
-            // Grab the live coordinates silently
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
+            // 1. Trigger Initial SOS
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+
+                triggerUI.classList.add('fade-out');
+                lockScreen.classList.remove('opacity-0');
+                lockScreen.classList.add('fade-in');
+
+                try {
+                    const response = await fetch(TRIGGER_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: 2, lat, lng }) // user_id 2 is the demo user from init_v2.php
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        activeAlertId = result.alert_id;
+                        startContinuousTracking();
+                    }
+                } catch (error) {
+                    console.error('SOS Trigger Failed:', error);
+                }
+            }, null, { enableHighAccuracy: true });
+        });
+
+        function startContinuousTracking() {
+            if (trackingInterval) return;
+            
+            // Poll location every 10 seconds as per PRD
+            trackingInterval = setInterval(() => {
+                navigator.geolocation.getCurrentPosition(async (position) => {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
 
-                    // Immediately hide the UI to show the fake lock screen
-                    triggerUI.classList.add('fade-out');
-                    lockScreen.classList.remove('opacity-0');
-                    lockScreen.classList.add('fade-in');
-
-                    // Send the payload to your Railway backend
                     try {
-                        const response = await fetch(API_URL, {
+                        const response = await fetch(UPDATE_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                user_id: 1, // Matches the dummy user
-                                lat: lat,
-                                lng: lng
-                            })
+                            body: JSON.stringify({ alert_id: activeAlertId, lat, lng })
                         });
-
-                        const result = await response.json();
-                        console.log('Backend Response:', result);
-                    } catch (error) {
-                        console.error('Failed to send SOS:', error);
+                        const res = await response.json();
+                        if (!res.success) {
+                            console.log("Tracking stopped:", res.error);
+                            clearInterval(trackingInterval);
+                            trackingInterval = null;
+                        }
+                    } catch (err) {
+                        console.error("Update failed:", err);
                     }
-                },
-                (error) => {
-                    console.error('GPS Error:', error);
-                    statusText.innerText = 'Failed to acquire GPS.';
-                },
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-            );
-        });
+                }, null, { enableHighAccuracy: true });
+            }, 10000);
+        }
     </script>
 </body>
 </html>

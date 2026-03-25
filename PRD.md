@@ -1,99 +1,124 @@
 # Product Requirements Document (PRD)
-## DHMR (Detect Human Manipulation and Rape) - MVP Simulation
+## DHMR (Detect Human Manipulation and Rape) - Robust Beta Architecture
 
-**Version:** 1.0 (10-Hour Sprint Edition)
-**Objective:** Build a functional, web-based "Wizard of Oz" simulation to demonstrate the DHMR silent SOS system, AI risk scoring, and real-time dashboard monitoring for a live presentation.
+**Version:** 2.0 (Production-Ready Architecture)
+**Objective:** Evolve the MVP into a secure, multi-user system featuring dynamic safe zones, user authentication, continuous background tracking, and a secured responder dashboard.
 
 ---
 
 ## 1. Tech Stack
-To minimize overhead and ensure rapid deployment within the 10-hour window, the stack is stripped down to raw essentials:
-* **Backend:** Vanilla PHP 8+ (No frameworks, raw routing)
-* **Database:** SQLite (for zero-config setup) or MySQL using PDO
-* **Frontend (Simulator & Admin):** Vanilla JavaScript, HTML5
+* **Backend:** Vanilla PHP 8+ (Structured with Service Classes & Auth Middleware)
+* **Database:** MySQL via PDO (Relational Architecture)
+* **Frontend:** Vanilla JavaScript, HTML5, PWA manifest (for native app feel)
 * **Styling:** Tailwind CSS (via CDN)
-* **Mapping:** Leaflet.js with OpenStreetMap (No API keys required)
+* **Mapping:** Leaflet.js with OpenStreetMap
 
 ---
 
 ## 2. System Architecture
 
-The MVP consists of three isolated components:
+### A. User Management & Configuration (New)
+* **Purpose:** Allows users to log in, set up their trusted contacts, and define their personal safe zones (Home, School, Workplace).
+* **UI:** A secure user dashboard.
 
-### A. The "Wearable" Simulator (Mobile Web View)
-* **Purpose:** Acts as the physical hardware trigger.
-* **UI:** A dark, minimalist interface simulating a locked or blank phone screen to demonstrate discreet activation.
-* **Function:** Uses `navigator.geolocation` to grab real-time GPS coordinates and sends a silent POST payload to the backend.
+### B. The Smart "Wearable" Simulator (Upgraded)
+* **Purpose:** Acts as the physical hardware trigger with background polling.
+* **Function:** Once triggered, it sends a continuous POST payload every 10 seconds to update the user's live track on the admin map.
 
-### B. The Core API & Risk Engine (PHP Backend)
-* **Purpose:** Receives data, assesses risk, and stores alerts.
-* **Function:** A set of standalone PHP files handling database connections, data insertion, and a rule-based algorithm that calculates a 0-100 risk score based on time (WAT) and location.
+### C. The Core API & Risk Engine (Upgraded)
+* **Purpose:** Evaluates risk dynamically based on the specific user's saved data.
+* **Function:** Uses the Haversine formula to check the user's incoming coordinates against *their* specific `safe_zones` table, rather than a hardcoded global zone.
 
-### C. The Responder Dashboard (Admin Web View)
-* **Purpose:** The presentation screen showing real-time emergency monitoring.
-* **UI:** A split-screen layout with an active alert sidebar and a live map.
-* **Function:** Polls the backend every 3 seconds for new alerts, drops red pins on the map, and allows admins to mark alerts as "resolved."
+### D. The Responder Dashboard (Secured)
+* **Purpose:** Command center for monitoring.
+* **Function:** Now protected by PHP Session Auth. Shows active alerts, draws a polyline showing the user's movement history, and logs who resolved the alert.
 
 ---
 
-## 3. Database Schema
+## 3. Database Schema (Normalized)
 
 **Table 1: `users`**
-* `id` (INT, Primary Key, Auto Increment)
+* `id` (INT, PK, Auto Increment)
+* `email` (VARCHAR, Unique)
+* `password_hash` (VARCHAR)
 * `name` (VARCHAR)
-* `trusted_contact_phone` (VARCHAR)
+* `role` (ENUM: 'user', 'admin')
 
-**Table 2: `alerts`**
-* `id` (INT, Primary Key, Auto Increment)
-* `user_id` (INT, Foreign Key to users.id)
+**Table 2: `trusted_contacts`**
+* `id` (INT, PK)
+* `user_id` (INT, FK to users.id)
+* `contact_name` (VARCHAR)
+* `contact_phone` (VARCHAR)
+
+**Table 3: `safe_zones`**
+* `id` (INT, PK)
+* `user_id` (INT, FK to users.id)
+* `zone_name` (VARCHAR)
 * `latitude` (DECIMAL 10,8)
 * `longitude` (DECIMAL 11,8)
-* `risk_score` (INT) - Range 0 to 100
-* `status` (VARCHAR) - Default: 'active', can be 'resolved'
-* `created_at` (TIMESTAMP) - Default: CURRENT_TIMESTAMP
+* `radius_km` (DECIMAL 5,2)
+
+**Table 4: `alerts`**
+* `id` (INT, PK)
+* `user_id` (INT, FK to users.id)
+* `risk_score` (INT)
+* `status` (ENUM: 'active', 'resolved')
+* `created_at` (TIMESTAMP)
+
+**Table 5: `alert_locations` (New - For continuous tracking)**
+* `id` (INT, PK)
+* `alert_id` (INT, FK to alerts.id)
+* `latitude` (DECIMAL 10,8)
+* `longitude` (DECIMAL 11,8)
+* `recorded_at` (TIMESTAMP)
 
 ---
 
 ## 4. API Endpoints
 
-### Endpoint 1: Trigger Alert
-* **Path:** `/api/trigger_alert.php`
-* **Method:** `POST`
-* **Payload:** `{"user_id": 1, "lat": 6.5244, "lng": 3.3792}`
-* **Action:** 1. Runs the Risk Assessment Engine.
-    2. Inserts a new row into the `alerts` table.
-* **Response:** `{"success": true, "alert_id": X, "risk_score": Y}`
+### Auth Endpoints
+* `/api/auth/login.php` (POST: authenticates and sets PHP `$_SESSION`)
+* `/api/auth/logout.php` (POST: destroys session)
 
-### Endpoint 2: Get Active Alerts
-* **Path:** `/api/get_active_alerts.php`
-* **Method:** `GET`
-* **Action:** Fetches all alerts where `status = 'active'`.
-* **Response:** `[{"id": 1, "lat": 6.5244, "lng": 3.3792, "risk_score": 85, "created_at": "..."}]`
+### User Configuration Endpoints
+* `/api/user/add_contact.php` (POST)
+* `/api/user/add_zone.php` (POST)
 
-### Endpoint 3: Resolve Alert
-* **Path:** `/api/resolve_alert.php`
-* **Method:** `POST`
-* **Payload:** `{"alert_id": 1}`
-* **Action:** Updates `status` to 'resolved' for the given ID.
-* **Response:** `{"success": true}`
+### Emergency Endpoints
+* `/api/trigger_alert.php` (POST: Creates alert, logs first location, calculates dynamic risk)
+* `/api/update_location.php` (POST: Adds new lat/lng to `alert_locations` for an active alert)
+* `/api/admin/get_active_alerts.php` (GET: Protected. Fetches alerts, contacts, and location history arrays)
+* `/api/admin/resolve_alert.php` (POST: Protected)
 
 ---
 
-## 5. Risk Assessment Engine (Logic)
+## 5. Execution Phases (For Gemini CLI)
 
-The engine calculates a score out of 100 based on the following hardcoded rules:
-* **Base Score:** 20 points.
-* **Time Factor (WAT):** If `created_at` is between 22:00 (10 PM) and 05:00 (5 AM) West Africa Time, add **40 points**.
-* **Location Factor:** Define a hardcoded "Safe Zone" coordinate (e.g., the presentation venue or user's home). Use the Haversine formula to calculate the distance from the incoming coordinates. If distance > 5km, add **40 points**.
+Feed these prompts sequentially to the CLI to build the robust system:
 
----
+* **Phase 1: Advanced DB Setup:** "Generate a `db_connect.php` using PDO. Then, write a raw SQL script `init_v2.php` that drops existing tables and creates the normalized schema: `users`, `trusted_contacts`, `safe_zones`, `alerts`, and `alert_locations` with proper foreign key constraints. Insert one 'admin' user and one standard 'user' with a hashed password."
+* **Phase 2: Auth & Middleware:** "Write a secure login endpoint `api/auth/login.php` that verifies passwords and sets `$_SESSION['user_id']` and `$_SESSION['role']`. Then, create a middleware file `api/middleware/auth_check.php` that checks if a user is logged in, and another `admin_check.php` that ensures the role is 'admin', returning 401 JSON errors if they fail."
+* **Phase 3: The Dynamic Risk Engine:** "Rewrite `api/trigger_alert.php`. It must first query the `safe_zones` table for the specific `$user_id`. Loop through their saved zones using the Haversine formula. If the incoming coordinates are outside ALL of their personal safe zone radii, add 40 to the risk score. Insert the main alert into `alerts`, and the coordinate payload into `alert_locations`."
+* **Phase 4: Continuous Tracking API:** "Generate `api/update_location.php`. It accepts `alert_id`, `lat`, and `lng`. It verifies the alert is still 'active' and inserts a new row into the `alert_locations` table to create a breadcrumb trail."
+* **Phase 5: Secure Admin Dashboard & Polyline Mapping:** "Generate `admin/dashboard.php`. Include session checks at the top of the file to redirect unauthorized users. Update the JS to poll `api/admin/get_active_alerts.php`. When rendering the Leaflet map, don't just drop a pin—draw a `L.polyline()` connecting all the coordinates from `alert_locations` to show the user's movement path."
+* **Phase 6: User Settings UI:** "Generate a user-facing dashboard `user/settings.php`. Build a form using Tailwind CSS that allows a logged-in user to add a Trusted Contact (hitting `api/user/add_contact.php`) and define a Safe Zone by clicking on a Leaflet map to grab coordinates (hitting `api/user/add_zone.php`)."
 
-## 6. Execution Phases (For Gemini CLI)
 
-Feed these phases sequentially to your CLI tool to build the app:
+✦ I've finalized the PRD v2.0 implementation, including the updated "Wearable Simulator" with continuous tracking. I'll now delete the obsolete MVP files—init_db.php, admin.html, and the root API endpoints—to maintain a clean,
+  production-ready workspace.
 
-* **Phase 1: Database Setup:** "Generate a `database.php` file using PDO for SQLite (or MySQL) that creates the `users` and `alerts` tables if they don't exist, and inserts one dummy user."
-* **Phase 2: Core API & Risk Engine:** "Generate `api/trigger_alert.php`. It must accept a JSON POST request with lat/lng, calculate the risk score based on the Time Factor (WAT) and Location Factor (Haversine formula from a set coordinate in Nigeria), and insert the record into the database."
-* **Phase 3: The Simulator UI:** "Generate `simulator.html`. Use Tailwind CSS to create a pitch-black screen with one invisible but clickable div spanning the whole screen. On click, use `navigator.geolocation` to get the user's location, `fetch()` POST it to `api/trigger_alert.php`, and visually swap the screen to a fake lock screen image."
-* **Phase 4: Admin API:** "Generate `api/get_active_alerts.php` and `api/resolve_alert.php` to handle fetching and resolving database records."
-* **Phase 5: Admin Dashboard UI:** "Generate `admin.html`. Include Leaflet.js and Tailwind CSS. Create a sidebar for incoming alerts and a main div for the map. Write JS to `setInterval` every 3 seconds to fetch active alerts, plot them as red pins on the map, list them in the sidebar with a 'Resolve' button, and trigger a flashing red CSS animation on new alerts."
+✦ I've completed the implementation of DHMR Version 2.0, evolving the MVP into a secure, multi-user system with dynamic risk assessment and continuous tracking.
+
+  Key Deliverables:
+   * Normalized Database: Implemented a new schema via init_v2.php featuring users, trusted_contacts, safe_zones, and alert_locations for granular tracking.
+   * Secure Authentication: Added session-based login/logout with middleware (auth_check.php, admin_check.php) to protect sensitive endpoints and dashboards.
+   * Dynamic Risk Engine: Rewrote api/trigger_alert.php to calculate risk based on user-defined safe zones and Africa/Lagos time factors.
+   * Continuous Breadcrumb Tracking: Created api/update_location.php and updated simulator.html to log coordinates every 10 seconds during active alerts.
+   * Role-Based Dashboards:
+       * Admin Dashboard (admin/dashboard.php): Secure real-time monitoring with Leaflet.js polylines showing the user's movement path.
+       * User Settings (user/settings.php): Interface for users to manage trusted contacts and define safe zones interactively on a map.
+   * Clean Workspace: Removed obsolete MVP files and unified the entry point through login.html.
+
+  Next Steps: You can now run init_v2.php to set up your database and use the following credentials:
+   * Admin: admin@dhmr.com / admin123
+   * User: user@dhmr.com / user123
