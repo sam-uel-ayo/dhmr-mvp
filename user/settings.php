@@ -3,13 +3,13 @@
 require_once __DIR__ . '/../api/middleware/auth_check.php';
 require_once __DIR__ . '/../db_connect.php';
 
-// Fetch current user data
+$user_id = $_SESSION['user_id'];
 $stmt = $pdo->prepare("SELECT contact_name, contact_phone FROM trusted_contacts WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt->execute([$user_id]);
 $contacts = $stmt->fetchAll();
 
 $stmt = $pdo->prepare("SELECT zone_name, latitude, longitude, radius_km FROM safe_zones WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
+$stmt->execute([$user_id]);
 $zones = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -17,79 +17,93 @@ $zones = $stmt->fetchAll();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DHMR User Settings</title>
+    <title>DHMR | Configuration</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; }
+        .glass-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); }
+        input { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; color: white !important; }
+        input:focus { border-color: #007AFF !important; outline: none; }
+        #map { height: 250px; border-radius: 1.5rem; filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+    </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="min-h-screen pb-20">
 
-    <nav class="bg-white shadow-sm p-4 flex justify-between items-center mb-8">
-        <h1 class="text-xl font-bold text-gray-800">DHMR Settings</h1>
-        <div class="flex items-center space-x-4">
-            <span class="text-sm text-gray-600">Welcome, <?php echo htmlspecialchars($_SESSION['name']); ?></span>
-            <button onclick="logout()" class="text-sm text-red-600 underline">Logout</button>
+    <nav class="p-8 flex justify-between items-center border-b border-white/5 mb-12">
+        <div>
+            <h1 class="text-xl font-bold tracking-tighter">DHMR <span class="font-light opacity-30 text-[10px] uppercase tracking-widest ml-2">Settings</span></h1>
+        </div>
+        <div class="flex items-center space-x-6">
+            <a href="../app/dashboard.php" class="text-[10px] uppercase tracking-widest text-gray-400 hover:text-white transition">App Dashboard</a>
+            <button onclick="logout()" class="text-[10px] uppercase tracking-widest text-red-500 hover:text-red-400 transition">Sign Out</button>
         </div>
     </nav>
 
-    <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 p-4">
+    <div class="max-w-5xl mx-auto px-6 grid md:grid-cols-2 gap-12">
         
         <!-- Trusted Contacts -->
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-lg font-bold mb-4 border-b pb-2">Trusted Contacts</h2>
-            <ul class="space-y-3 mb-6">
-                <?php foreach($contacts as $c): ?>
-                <li class="text-sm flex justify-between bg-gray-50 p-2 rounded">
-                    <span><b><?php echo htmlspecialchars($c['contact_name']); ?>:</b> <?php echo htmlspecialchars($c['contact_phone']); ?></span>
-                </li>
-                <?php endforeach; ?>
-                <?php if(empty($contacts)): ?>
-                <li class="text-sm text-gray-400 italic">No contacts added yet.</li>
-                <?php endif; ?>
-            </ul>
+        <div class="space-y-8">
+            <section class="glass-card p-8 rounded-[2.5rem]">
+                <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-blue-500 mb-8">Trusted Contacts</h2>
+                <div class="space-y-4 mb-10">
+                    <?php foreach($contacts as $c): ?>
+                    <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5">
+                        <span class="text-sm font-semibold"><?php echo htmlspecialchars($c['contact_name']); ?></span>
+                        <span class="text-xs opacity-50"><?php echo htmlspecialchars($c['contact_phone']); ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php if(empty($contacts)): ?>
+                    <p class="text-xs text-gray-500 italic">No contacts registered.</p>
+                    <?php endif; ?>
+                </div>
 
-            <form id="contact-form" class="space-y-3 border-t pt-4">
-                <input type="text" id="contact-name" placeholder="Contact Name" required class="w-full px-3 py-2 border rounded text-sm">
-                <input type="text" id="contact-phone" placeholder="Phone Number" required class="w-full px-3 py-2 border rounded text-sm">
-                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded text-sm hover:bg-blue-700">Add Contact</button>
-            </form>
+                <form id="contact-form" class="space-y-4">
+                    <input type="text" id="contact-name" placeholder="Full Name" required class="w-full px-5 py-4 rounded-2xl text-sm">
+                    <input type="text" id="contact-phone" placeholder="Phone Number" required class="w-full px-5 py-4 rounded-2xl text-sm">
+                    <button type="submit" class="w-full bg-white text-black py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-gray-200 transition">Add Contact</button>
+                </form>
+            </section>
         </div>
 
         <!-- Safe Zones -->
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-lg font-bold mb-4 border-b pb-2">Safe Zones</h2>
-            <ul class="space-y-3 mb-6">
-                <?php foreach($zones as $z): ?>
-                <li class="text-xs flex flex-col bg-gray-50 p-2 rounded">
-                    <span class="font-bold"><?php echo htmlspecialchars($z['zone_name']); ?></span>
-                    <span class="text-gray-500">Radius: <?php echo $z['radius_km']; ?>km | <?php echo $z['latitude']; ?>, <?php echo $z['longitude']; ?></span>
-                </li>
-                <?php endforeach; ?>
-                <?php if(empty($zones)): ?>
-                <li class="text-sm text-gray-400 italic">No safe zones defined yet.</li>
-                <?php endif; ?>
-            </ul>
-
-            <div class="border-t pt-4">
-                <p class="text-xs text-gray-500 mb-2 italic">Click on the map to set zone center</p>
-                <div id="map" class="h-48 w-full rounded mb-3 border"></div>
-                <form id="zone-form" class="space-y-3">
-                    <input type="text" id="zone-name" placeholder="Zone Name (Home, Work, etc)" required class="w-full px-3 py-2 border rounded text-sm">
-                    <div class="flex space-x-2">
-                        <input type="text" id="zone-lat" placeholder="Lat" readonly required class="w-1/2 px-3 py-2 border rounded text-xs bg-gray-100">
-                        <input type="text" id="zone-lng" placeholder="Lng" readonly required class="w-1/2 px-3 py-2 border rounded text-xs bg-gray-100">
+        <div class="space-y-8">
+            <section class="glass-card p-8 rounded-[2.5rem]">
+                <h2 class="text-xs font-bold uppercase tracking-[0.2em] text-blue-500 mb-8">Dynamic Safe Zones</h2>
+                <div class="space-y-4 mb-10">
+                    <?php foreach($zones as $z): ?>
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-semibold"><?php echo htmlspecialchars($z['zone_name']); ?></span>
+                            <span class="text-[10px] opacity-50 uppercase tracking-widest"><?php echo $z['radius_km']; ?>km Radius</span>
+                        </div>
+                        <p class="text-[10px] opacity-30 font-mono"><?php echo $z['latitude']; ?>, <?php echo $z['longitude']; ?></p>
                     </div>
-                    <input type="number" id="zone-radius" step="0.1" placeholder="Radius (km)" required class="w-full px-3 py-2 border rounded text-sm">
-                    <button type="submit" class="w-full bg-green-600 text-white py-2 rounded text-sm hover:bg-green-700">Save Zone</button>
-                </form>
-            </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="space-y-4">
+                    <p class="text-[10px] uppercase tracking-widest font-bold opacity-30 mb-2">Set New Zone on Map</p>
+                    <div id="map" class="mb-6"></div>
+                    <form id="zone-form" class="space-y-4">
+                        <input type="text" id="zone-name" placeholder="Zone Identifier (e.g. Workspace)" required class="w-full px-5 py-4 rounded-2xl text-sm">
+                        <div class="flex space-x-3">
+                            <input type="text" id="zone-lat" placeholder="Lat" readonly required class="w-1/2 px-5 py-4 rounded-2xl text-xs opacity-50">
+                            <input type="text" id="zone-lng" placeholder="Lng" readonly required class="w-1/2 px-5 py-4 rounded-2xl text-xs opacity-50">
+                        </div>
+                        <input type="number" id="zone-radius" step="0.1" placeholder="Radius in KM (e.g. 2.5)" required class="w-full px-5 py-4 rounded-2xl text-sm">
+                        <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-blue-700 transition">Save Safe Zone</button>
+                    </form>
+                </div>
+            </section>
         </div>
 
     </div>
 
     <script>
-        // Map Setup
-        const map = L.map('map').setView([9.0820, 8.6753], 6);
+        const map = L.map('map', { zoomControl: false }).setView([6.5244, 3.3792], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         let activeMarker = null;
@@ -98,48 +112,35 @@ $zones = $stmt->fetchAll();
             const { lat, lng } = e.latlng;
             document.getElementById('zone-lat').value = lat.toFixed(6);
             document.getElementById('zone-lng').value = lng.toFixed(6);
-
             if (activeMarker) map.removeLayer(activeMarker);
             activeMarker = L.marker([lat, lng]).addTo(map);
         });
 
-        // Contact Form
         document.getElementById('contact-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const name = document.getElementById('contact-name').value;
-            const phone = document.getElementById('contact-phone').value;
-
-            const res = await fetch('/api/user/add_contact.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, phone })
+            const res = await fetch('../api/user/add_contact.php', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: document.getElementById('contact-name').value, phone: document.getElementById('contact-phone').value })
             });
-            const result = await res.json();
-            if (result.success) location.reload();
-            else alert(result.error);
+            if ((await res.json()).success) location.reload();
         });
 
-        // Zone Form
         document.getElementById('zone-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const name = document.getElementById('zone-name').value;
-            const lat = document.getElementById('zone-lat').value;
-            const lng = document.getElementById('zone-lng').value;
-            const radius = document.getElementById('zone-radius').value;
-
-            const res = await fetch('/api/user/add_zone.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, lat, lng, radius })
+            const res = await fetch('../api/user/add_zone.php', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    name: document.getElementById('zone-name').value, 
+                    lat: document.getElementById('zone-lat').value, 
+                    lng: document.getElementById('zone-lng').value, 
+                    radius: document.getElementById('zone-radius').value 
+                })
             });
-            const result = await res.json();
-            if (result.success) location.reload();
-            else alert(result.error);
+            if ((await res.json()).success) location.reload();
         });
 
         async function logout() {
-            await fetch('/api/auth/logout.php');
-            window.location.href = '/login.html';
+            await fetch('/api/auth/logout.php'); window.location.href = '/login.html';
         }
     </script>
 </body>
