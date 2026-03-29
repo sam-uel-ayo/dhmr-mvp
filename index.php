@@ -36,7 +36,8 @@
                 Discreet wearables. Intelligent detection. Instant response.
             </p>
             <div class="flex space-x-4 justify-center">
-                <a href="hardware/wearable.php" class="border border-white/20 px-8 py-4 rounded-full hover:bg-white/5 transition text-sm font-medium">Explore Simulation</a>
+                <a href="simulation.php" class="bg-blue-600 text-white px-8 py-4 rounded-full hover:bg-blue-700 transition text-sm font-bold tracking-widest uppercase shadow-[0_0_30px_rgba(0,122,255,0.4)]">Launch Simulator</a>
+                <a href="hardware/wearable.php" class="border border-white/20 px-8 py-4 rounded-full hover:bg-white/5 transition text-sm font-medium">Core Vision</a>
             </div>
         </div>
         
